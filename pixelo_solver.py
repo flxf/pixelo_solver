@@ -4,12 +4,16 @@ import sys
 from PIL import Image
 from array import array
 
-ANSWER = (53, 131)
+LEFT_FROM_ANCHOR = 11
+TOP_FROM_ANCHOR = -20
+
 DIGIT_WIDTH = 18
 DIGIT_HEIGHT = 16
 
 BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
+
+MAX_NUMBERS = 14
 
 class FasterImage:
   def __init__(self, image):
@@ -37,7 +41,7 @@ def norm2(pixel_a, pixel_b):
 
 def img_distance(img_a, pos_a, img_b, pos_b, width, height):
   err = 0
-  pixels = 0
+  #pixels = 0
 
   for c in range(0, width):
     for r in range(0, height):
@@ -50,10 +54,10 @@ def img_distance(img_a, pos_a, img_b, pos_b, width, height):
       else:
         nm = norm2(pixel_a, pixel_b)
 
-      pixels += 1
+      #pixels += 1
       err += nm
 
-  return err / pixels
+  return err #/ pixels
 
 def img_subequal(img_a, pos_a, img_b, pos_b, width, height):
   for c in range(0, width):
@@ -85,7 +89,6 @@ def digit_crop(screen, left, top):
 
 def luminance(pixel):
   r, g, b, a = [ component / 255.0 for component in pixel ]
-  #return 0.2126 * (pixel[0] / 255.0) + 0.7152 * (pixel[1] / 255.0) + 0.0722 * (pixel[2] / 255.0)
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 def enhance_digit(crop):
@@ -99,7 +102,7 @@ def enhance_digit(crop):
         crop.putpixel(c, r, WHITE)
 
 def load_templates():
-  templates = [ None ] + [ FasterImage(Image.open("numbers/%d.png" % (x))) for x in range(1, 10) ]
+  templates = [ FasterImage(Image.open("numbers/%d.png" % (x))) for x in range(0, MAX_NUMBERS) ]
   return templates
 
 def template_analysis(haystack, templates):
@@ -107,19 +110,21 @@ def template_analysis(haystack, templates):
 
   distances = []
 
-  for x in range(1, 10):
+  for x in range(0, MAX_NUMBERS):
     template = templates[x]
     tsize = template.size()
     left = (h_width - tsize[0]) / 2
-    #print x, img_distance(haystack, (left, 0), template, (0, 0), tsize[0], tsize[1])
+    distances.append((img_distance(haystack, (left, 0), template, (0, 0), tsize[0], tsize[1]), x))
+
+  min_distance, digit = min(distances)
+  if min_distance < 10000:
+    return digit
+  return None
 
 if __name__ == "__main__":
   OFFSET_HEIGHT = 20
 
-  GRID_SIDE = 30
-
-  LEFT_FROM_ANCHOR = 11
-  TOP_FROM_ANCHOR = -20
+  GRID_SIDE = 25
 
   # TODO: Convert Image object into a fast pixelaccess object with size and width
   screen = FasterImage(Image.open("example_screen2.png").convert("RGBA"))
@@ -127,19 +132,32 @@ if __name__ == "__main__":
 
   templates = load_templates()
 
-  #apos = img_indexof(screen_pix, screen.size, anchor_pix, anchor.size)
-  apos = img_indexof(screen, anchor)
-  print apos
-  #bpos = (apos[0] + LEFT_FROM_ANCHOR, apos[1] + TOP_FROM_ANCHOR)
-  #cpos = (apos[0] + LEFT_FROM_ANCHOR + 2 * GRID_SIDE - 1, apos[1] + TOP_FROM_ANCHOR)
+  anchor_pos = img_indexof(screen, anchor)
+  tophints_start = (anchor_pos[0], anchor_pos[1] + TOP_FROM_ANCHOR)
 
-  ### This is a 9
-  #crop = digit_crop(screen, cpos[0], cpos[1])
-  #crop_pix = crop.load()
-  #enhance_digit(crop_pix)
-  #template_analysis(crop_pix, crop.size, templates)
+  # Sliding window
+  # TODO: Unpack tuple into arguments
 
-  hc = FasterImage(Image.open("hc.png"))
-  enhance_digit(hc)
-  hc.show()
-  template_analysis(hc, templates)
+  find = 0
+
+  window_pos = tophints_start[0]
+  while window_pos < 800:
+    crop = digit_crop(screen, window_pos, tophints_start[1])
+    answer = template_analysis(crop, templates)
+    if answer != None:
+      find += 1
+      print window_pos
+      print "find no.", find, "=", answer
+      screen.putpixel(window_pos, tophints_start[1], (255, 0, 0, 255))
+
+      #raw_input("Hit ENTER to continue")
+      window_pos += GRID_SIDE
+
+    window_pos += 1
+
+  screen.show()
+
+  #hc = FasterImage(Image.open("hc.png"))
+  #enhance_digit(hc)
+  #hc.show()
+  #template_analysis(hc, templates)
