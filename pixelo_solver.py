@@ -37,11 +37,13 @@ class FasterImage:
     self.image.show()
 
 def norm2(pixel_a, pixel_b):
-  return math.sqrt(sum((pixel_a[i] - pixel_b[i]) ** 2 for i in range(0, 3)))
+  if pixel_a == pixel_b:
+    return 0
+  return 1
+  #return math.sqrt(sum((pixel_a[i] - pixel_b[i]) ** 2 for i in range(0, 3)))
 
 def img_distance(img_a, pos_a, img_b, pos_b, width, height):
   err = 0
-  #pixels = 0
 
   for c in range(0, width):
     for r in range(0, height):
@@ -52,12 +54,11 @@ def img_distance(img_a, pos_a, img_b, pos_b, width, height):
       if pixel_b[3] == 0:
         nm = norm2(pixel_a, WHITE)
       else:
-        nm = norm2(pixel_a, pixel_b)
+        nm = norm2(pixel_a, BLACK)
 
-      #pixels += 1
       err += nm
 
-  return err #/ pixels
+  return err
 
 def img_subequal(img_a, pos_a, img_b, pos_b, width, height):
   for c in range(0, width):
@@ -117,7 +118,8 @@ def template_analysis(haystack, templates):
     distances.append((img_distance(haystack, (left, 0), template, (0, 0), tsize[0], tsize[1]), x))
 
   min_distance, digit = min(distances)
-  if min_distance < 10000:
+  if min_distance <= 12:
+    print min_distance
     return digit
   return None
 
@@ -126,38 +128,53 @@ if __name__ == "__main__":
 
   GRID_SIDE = 25
 
-  # TODO: Convert Image object into a fast pixelaccess object with size and width
-  screen = FasterImage(Image.open("example_screen2.png").convert("RGBA"))
-  anchor = FasterImage(Image.open("pixelo_anchor_3.png"))
+  FULL_RUN = True
 
   templates = load_templates()
 
-  anchor_pos = img_indexof(screen, anchor)
-  tophints_start = (anchor_pos[0], anchor_pos[1] + TOP_FROM_ANCHOR)
+  if FULL_RUN:
+    # TODO: Convert Image object into a fast pixelaccess object with size and width
+    screen = FasterImage(Image.open("example_screen2.png").convert("RGBA"))
+    anchor = FasterImage(Image.open("pixelo_anchor_3.png"))
 
-  # Sliding window
-  # TODO: Unpack tuple into arguments
+    anchor_pos = img_indexof(screen, anchor)
+    tophints_start = (anchor_pos[0], anchor_pos[1] + TOP_FROM_ANCHOR)
 
-  find = 0
+    # Sliding window
+    # TODO: Unpack tuple into arguments
 
-  window_pos = tophints_start[0]
-  while window_pos < 800:
-    crop = digit_crop(screen, window_pos, tophints_start[1])
-    answer = template_analysis(crop, templates)
-    if answer != None:
-      find += 1
-      print window_pos
-      print "find no.", find, "=", answer
-      screen.putpixel(window_pos, tophints_start[1], (255, 0, 0, 255))
+    find = 0
 
-      #raw_input("Hit ENTER to continue")
-      window_pos += GRID_SIDE
+    window_pos = tophints_start[0]
 
-    window_pos += 1
+    while window_pos < 800:
+      crop = digit_crop(screen, window_pos, tophints_start[1])
+      enhance_digit(crop)
+      answer = template_analysis(crop, templates)
+      if answer != None:
+        find += 1
+        print window_pos
+        print "find no.", find, "=", answer
+        screen.putpixel(window_pos, tophints_start[1], (255, 0, 0, 255))
 
-  screen.show()
+        #raw_input("Hit ENTER to continue")
+        window_pos += GRID_SIDE
 
-  #hc = FasterImage(Image.open("hc.png"))
-  #enhance_digit(hc)
-  #hc.show()
-  #template_analysis(hc, templates)
+      window_pos += 1
+
+    screen.show()
+  else:
+    #screen = FasterImage(Image.open("example_screen2.png").convert("RGBA"))
+    #anchor = FasterImage(Image.open("pixelo_anchor_3.png"))
+
+    #position = (359, 219)
+    #crop = digit_crop(screen, position[0], position[1])
+    #enhance_digit(crop)
+    #crop.show()
+
+    #template_analysis(crop, templates)
+
+    hc = FasterImage(Image.open("vision_tests/hc.png"))
+    enhance_digit(hc)
+    hc.show()
+    print template_analysis(hc, templates)
