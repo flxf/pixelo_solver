@@ -7,6 +7,8 @@ from array import array
 LEFT_FROM_ANCHOR = 11
 TOP_FROM_ANCHOR = -20
 
+ROW_HEIGHT = 18
+
 DIGIT_WIDTH = 18
 DIGIT_HEIGHT = 16
 
@@ -60,6 +62,27 @@ def img_distance(img_a, pos_a, img_b, pos_b, width, height):
 
   return err
 
+def img_within(img_a, pos_a, img_b, pos_b, width, height, threshold):
+  err = 0
+
+  for c in range(0, width):
+    for r in range(0, height):
+      pixel_a = img_a.getpixel(pos_a[0] + c, pos_a[1] + r)
+      pixel_b = img_b.getpixel(pos_b[0] + c, pos_b[1] + r)
+
+      # Treat transparent pixels as white
+      if pixel_b[3] == 0:
+        nm = norm2(pixel_a, WHITE)
+      else:
+        nm = norm2(pixel_a, BLACK)
+
+      err += nm
+
+      if (err > threshold):
+        return False
+
+  return True
+
 def img_subequal(img_a, pos_a, img_b, pos_b, width, height):
   for c in range(0, width):
     for r in range(0, height):
@@ -106,7 +129,7 @@ def load_templates():
   templates = [ FasterImage(Image.open("numbers/%d.png" % (x))) for x in range(0, MAX_NUMBERS) ]
   return templates
 
-def template_analysis(haystack, templates):
+def template_analysis1(haystack, templates):
   h_width, h_height = haystack.size()
 
   distances = []
@@ -119,9 +142,43 @@ def template_analysis(haystack, templates):
 
   min_distance, digit = min(distances)
   if min_distance <= 12:
-    print min_distance
     return digit
   return None
+
+def template_analysis2(haystack, templates):
+  h_width, h_height = haystack.size()
+
+  for x in range(1, MAX_NUMBERS):
+    template = templates[x]
+    tsize = template.size()
+    left = (h_width - tsize[0]) / 2
+
+    if img_within(haystack, (left, 0), template, (0, 0), tsize[0], tsize[1], 12):
+      return x
+
+  return None
+
+def sliding_window(screen, start_col, start_row):
+  #start_col, start_row = start_pos
+  iter_col = start_col
+
+  answers = [ 0 ] * 15
+
+  while iter_col < start_col + 450:
+    crop = digit_crop(screen, iter_col, start_row)
+    enhance_digit(crop)
+    answer = template_analysis2(crop, templates)
+
+    if answer != None:
+      space_num = (iter_col - start_col) / 29
+      answers[space_num] = answer
+
+      screen.putpixel(iter_col, start_row, (255, 0, 0, 255))
+      iter_col += GRID_SIDE
+
+    iter_col += 1
+
+  return answers
 
 if __name__ == "__main__":
   OFFSET_HEIGHT = 20
@@ -140,27 +197,8 @@ if __name__ == "__main__":
     anchor_pos = img_indexof(screen, anchor)
     tophints_start = (anchor_pos[0], anchor_pos[1] + TOP_FROM_ANCHOR)
 
-    # Sliding window
-    # TODO: Unpack tuple into arguments
-
-    find = 0
-
-    window_pos = tophints_start[0]
-
-    while window_pos < 800:
-      crop = digit_crop(screen, window_pos, tophints_start[1])
-      enhance_digit(crop)
-      answer = template_analysis(crop, templates)
-      if answer != None:
-        find += 1
-        print window_pos
-        print "find no.", find, "=", answer
-        screen.putpixel(window_pos, tophints_start[1], (255, 0, 0, 255))
-
-        #raw_input("Hit ENTER to continue")
-        window_pos += GRID_SIDE
-
-      window_pos += 1
+    for i in range(0, 8):
+      print sliding_window(screen, tophints_start[0], tophints_start[1] - i * 18)
 
     screen.show()
   else:
