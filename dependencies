@@ -1,0 +1,5 @@
+# Python dependencies for pixelo_solver
+# Install via 'pip install -r dependencies'
+
+pillow
+pyuserinput
