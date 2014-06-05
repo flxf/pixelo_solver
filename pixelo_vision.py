@@ -7,6 +7,7 @@ from array import array
 LEFT_FROM_ANCHOR = 11
 TOP_FROM_ANCHOR = -20
 
+# TODO: Naming difference between "logical" widths (rows) and "pixel" widths
 ROW_HEIGHT = 18
 
 DIGIT_WIDTH = 18
@@ -16,6 +17,9 @@ BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
 
 MAX_NUMBERS = 14
+MAX_CLUES = 8
+
+GRID_WIDTH = 25
 
 class FasterImage:
   def __init__(self, image):
@@ -158,49 +162,83 @@ def template_analysis2(haystack, templates):
 
   return None
 
-def sliding_window(screen, start_col, start_row):
-  #start_col, start_row = start_pos
+def sliding_window(screen, start_col, start_row, clue_type = "column"):
   iter_col = start_col
 
-  answers = [ 0 ] * 15
+  answers = None
 
-  while iter_col < start_col + 450:
+  if clue_type == "column":
+    answers = [ 0 ] * 15
+    slide_distance = 450
+  else:
+    answers = []
+    slide_distance = 450
+
+  while iter_col < start_col + slide_distance:
     crop = digit_crop(screen, iter_col, start_row)
     enhance_digit(crop)
     answer = template_analysis2(crop, templates)
 
     if answer != None:
-      space_num = (iter_col - start_col) / 29
-      answers[space_num] = answer
+      # This is wrong. We do this because our vision isn't general enough
+      if clue_type == "column":
+        space_num = (iter_col - start_col) / 29
+        answers[space_num] = answer
+      else:
+        answers.append(answer)
 
       screen.putpixel(iter_col, start_row, (255, 0, 0, 255))
-      iter_col += GRID_SIDE
+      iter_col += 18 # TODO: Constant
 
     iter_col += 1
 
   return answers
 
-if __name__ == "__main__":
-  OFFSET_HEIGHT = 20
+def do_vision(screen):
+    def trim_clue(clue):
+      idx = len(clue) - 1
+      for i in range(0, len(clue)):
+        if clue[i] != 0:
+          idx = i
+          break
 
-  GRID_SIDE = 25
+      return clue[idx:]
 
-  FULL_RUN = True
-
-  templates = load_templates()
-
-  if FULL_RUN:
-    # TODO: Convert Image object into a fast pixelaccess object with size and width
-    screen = FasterImage(Image.open("example_screen2.png").convert("RGBA"))
     anchor = FasterImage(Image.open("pixelo_anchor_3.png"))
 
     anchor_pos = img_indexof(screen, anchor)
     tophints_start = (anchor_pos[0], anchor_pos[1] + TOP_FROM_ANCHOR)
 
-    for i in range(0, 8):
-      print sliding_window(screen, tophints_start[0], tophints_start[1] - i * 18)
+    # Identify column clues
+    column_clues_scanlines = []
+    for i in range(0, MAX_CLUES):
+      scanline = sliding_window(screen, tophints_start[0], tophints_start[1] - i * 18)
+      column_clues_scanlines.append(scanline)
 
-    screen.show()
+    column_clues = []
+    for i in range(0, 15):
+      column_clue = [ column_clues_scanlines[j][i] for j in range(0, MAX_CLUES) ]
+      column_clue.reverse()
+      column_clues.append(trim_clue(column_clue))
+
+    row_clues = []
+    for i in range(0, 15):
+      row_clue = sliding_window(screen, anchor_pos[0] - 150, anchor_pos[1] + 12 + 30 * i, "row")
+      row_clues.append(row_clue)
+
+    return {
+      "columns": column_clues,
+      "rows": row_clues
+    }
+
+if __name__ == "__main__":
+  FULL_RUN = True
+
+  templates = load_templates()
+
+  if FULL_RUN:
+    screen = FasterImage(Image.open("example_screen2.png").convert("RGBA"))
+    clues = do_vision(screen)
   else:
     #screen = FasterImage(Image.open("example_screen2.png").convert("RGBA"))
     #anchor = FasterImage(Image.open("pixelo_anchor_3.png"))
