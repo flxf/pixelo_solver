@@ -3,6 +3,7 @@ import sys
 
 from PIL import Image
 from array import array
+from faster_image import FasterImage
 
 LEFT_FROM_ANCHOR = 11
 TOP_FROM_ANCHOR = -20
@@ -16,31 +17,10 @@ DIGIT_HEIGHT = 16
 BLACK = (0, 0, 0, 255)
 WHITE = (255, 255, 255, 255)
 
-MAX_NUMBERS = 14
+MAX_NUMBERS = 16
 MAX_CLUES = 8
 
 GRID_WIDTH = 25
-
-class FasterImage:
-  def __init__(self, image):
-    self.image = image
-    self.image_pix = image.load()
-
-  def size(self):
-    return self.image.size
-
-  def getpixel(self, c, r):
-    return self.image_pix[c, r]
-
-  def putpixel(self, c, r, v):
-    self.image_pix[c, r] = v
-
-  def crop(self, limits):
-    c = self.image.crop(limits)
-    return FasterImage(c)
-
-  def show(self):
-    self.image.show()
 
 def norm2(pixel_a, pixel_b):
   if pixel_a == pixel_b:
@@ -162,7 +142,7 @@ def template_analysis2(haystack, templates):
 
   return None
 
-def sliding_window(screen, start_col, start_row, clue_type = "column"):
+def sliding_window(screen, start_col, start_row, templates, clue_type = "column"):
   iter_col = start_col
 
   answers = None
@@ -195,51 +175,55 @@ def sliding_window(screen, start_col, start_row, clue_type = "column"):
   return answers
 
 def do_vision(screen):
-    def trim_clue(clue):
-      idx = len(clue) - 1
-      for i in range(0, len(clue)):
-        if clue[i] != 0:
-          idx = i
-          break
+  def trim_clue(clue):
+    idx = len(clue) - 1
+    for i in range(0, len(clue)):
+      if clue[i] != 0:
+        idx = i
+        break
 
-      return clue[idx:]
+    return clue[idx:]
 
-    anchor = FasterImage(Image.open("pixelo_anchor_3.png"))
+  templates = load_templates()
 
-    anchor_pos = img_indexof(screen, anchor)
-    tophints_start = (anchor_pos[0], anchor_pos[1] + TOP_FROM_ANCHOR)
+  anchor = FasterImage(Image.open("pixelo_anchor_3.png"))
+  anchor_pos = img_indexof(screen, anchor)
+  if anchor_pos == (-1, -1):
+    return {}
 
-    # Identify column clues
-    column_clues_scanlines = []
-    for i in range(0, MAX_CLUES):
-      scanline = sliding_window(screen, tophints_start[0], tophints_start[1] - i * 18)
-      column_clues_scanlines.append(scanline)
+  tophints_start = (anchor_pos[0], anchor_pos[1] + TOP_FROM_ANCHOR)
 
-    column_clues = []
-    for i in range(0, 15):
-      column_clue = [ column_clues_scanlines[j][i] for j in range(0, MAX_CLUES) ]
-      column_clue.reverse()
-      column_clues.append(trim_clue(column_clue))
+  # Identify column clues
+  column_clues_scanlines = []
+  for i in range(0, MAX_CLUES):
+    scanline = sliding_window(screen, tophints_start[0], tophints_start[1] - i * 18, templates)
+    column_clues_scanlines.append(scanline)
 
-    row_clues = []
-    for i in range(0, 15):
-      row_clue = sliding_window(screen, anchor_pos[0] - 150, anchor_pos[1] + 12 + 30 * i, "row")
-      row_clues.append(row_clue)
+  column_clues = []
+  for i in range(0, 15):
+    column_clue = [ column_clues_scanlines[j][i] for j in range(0, MAX_CLUES) ]
+    column_clue.reverse()
+    column_clues.append(trim_clue(column_clue))
 
-    return {
-      "columns": column_clues,
-      "rows": row_clues
-    }
+  row_clues = []
+  for i in range(0, 15):
+    row_clue = sliding_window(screen, anchor_pos[0] - 150, anchor_pos[1] + 12 + 30 * i, templates, "row")
+    row_clues.append(row_clue)
+
+  return {
+    "columns": column_clues,
+    "rows": row_clues
+  }
 
 if __name__ == "__main__":
   FULL_RUN = True
 
-  templates = load_templates()
 
   if FULL_RUN:
     screen = FasterImage(Image.open("example_screen2.png").convert("RGBA"))
     clues = do_vision(screen)
   else:
+    templates = load_templates()
     #screen = FasterImage(Image.open("example_screen2.png").convert("RGBA"))
     #anchor = FasterImage(Image.open("pixelo_anchor_3.png"))
 
